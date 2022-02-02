@@ -45,6 +45,10 @@ namespace Server_TAC_Service
                     Thread Thread = new Thread(new ParameterizedThreadStart(ClientThread));
                     Thread.Start(Client);
                 }
+                catch (SocketException ex) when (ex.ErrorCode == 10004)
+                {
+                    return;
+                }
                 catch (Exception ex)
                 {
                     log.ToLog("Ошибка сервера: " + ex.Message);
