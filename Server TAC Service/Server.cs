@@ -13,18 +13,13 @@ namespace Server_TAC_Service
         public delegate void WorkServer(bool state);
         public event WorkServer onChange;
 
-        private string sqlServ = "192.168.0.101";
-        private string sqlUser = "sa";
-        private string sqlPass = "987312";
-
-        private SQL sql;
         private LogFile log;
 
         private bool ServerWork;
 
         public Server()
         {
-            sql = new SQL(String.Format(@"Provider=SQLOLEDB;Data Source={0};User ID={1};Password={2};", sqlServ, sqlUser, sqlPass));
+            
             log = new LogFile(@"C:\ServerTAC\Server.log");
             log.TruncateLog(3);
             ServerWork = false;
@@ -76,7 +71,7 @@ namespace Server_TAC_Service
         {
             try
             {
-                Client client = new Client(sql, log);
+                Client client = new Client(log);
                 client.Init((TcpClient)StateInfo);
             }
             catch (Exception ex)

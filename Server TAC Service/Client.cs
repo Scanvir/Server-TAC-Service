@@ -18,13 +18,16 @@ namespace Server_TAC_Service
         private LogFile log;
         private string TrueVersion = "0.8";
         private bool isTaraRest;
-        private string sqlDatabase = "sql2009";
+        private string sqlDatabase = "J_Base";
+        private string sqlServ = "192.168.0.137";
+        private string sqlUser = "sa";
+        private string sqlPass = "Inter0000";
 
         public const string RootDir = @"C:\ServerTAC";
 
-        public Client(SQL mainSql, LogFile mainlog)
+        public Client(LogFile mainlog)
         {
-            sql = mainSql;
+            sql = new SQL(String.Format(@"Provider=SQLOLEDB;Data Source={0};User ID={1};Password={2};", sqlServ, sqlUser, sqlPass));
             log = mainlog;
             string settingsFileName = @"C:\ServerTAC\settings.ini";
             if (File.Exists(settingsFileName))
@@ -628,13 +631,27 @@ namespace Server_TAC_Service
         private List<GoodRest> GetGoodRests(string code)
         {
             DateTime dd = DateTime.Now;
-            string query = "select t.code, con.value, t2.SP1055, SP5394 from(select objid, max(date) date from " + sqlDatabase + ".._1SCONST with(nolock) where id = 5230 group by objid) t1 " +
+            string query = "select t.code, con.value, t2.SP1055, SP5394 from(" +
+                "select objid, max(date) date from _1SCONST with(nolock) where id = 5230 group by objid" +
+                ") t1" +
                 "left join _1SCONST con with(nolock) on con.objid = t1.objid and con.date = t1.date  and con.id = 5230 left join SC5232 c with(nolock) on c.id = t1.objid " +
                 "left join SC92 t with(nolock) on t.id = c.parentext " +
                 "left join SC5234 tc with(nolock) on tc.id = c.SP5229 " +
-                "left join(select SP1053, sum(SP1055) SP1055 from RG1051 where period = '" + dd.ToString("yyyyMM01") + "' and SP1052 = '     GMB ' and SP1055 > 0 group by SP1053) t2 on t2.SP1053 = t.id " +
-                "where t.id in (select t.id from SC92 t where t.SP4032 in (select SP5213 from SC5204 where parentext in (select id from SC2286 where sp4767 = '" + code + "')) and t.isfolder <> 1 and t.ismark <> 1) " +
+                "left join(" +
+                "select SP1053, sum(SP1055) SP1055 from RG1051 " +
+                "left join SC124 s on s.id = SP1052 " +
+                "where period = '" + dd.ToString("yyyyMM01") + "' " +
+                "and s.code in (1, 12, 9) " + // 1, 12, 9 Jytomir  / 1 Vinnitsa
+                "and SP1055 > 0 " +
+                "group by SP1053" +
+                ") t2 on t2.SP1053 = t.id " +
+                "where t.id in (" +
+                "select t.id from SC92 t where t.SP4032 in (" +
+                "select SP5213 from SC5204 where parentext in (" +
+                "select id from SC2286 where sp4767 = '" + code + "')) " +
+                "and t.isfolder <> 1 and t.ismark <> 1) " +
                 "and tc.code = 1";
+
             log.ToLog(query);
             DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
