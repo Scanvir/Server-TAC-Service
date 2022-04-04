@@ -18,6 +18,7 @@ namespace Server_TAC_Service
         private LogFile log;
         private string TrueVersion = "0.8";
         private bool isTaraRest;
+        private string sqlDatabase = "sql2009";
 
         public const string RootDir = @"C:\ServerTAC";
 
@@ -291,6 +292,10 @@ namespace Server_TAC_Service
 
             if (Param[0] == "GetAuth")
             {
+                if (Param.Length < 3) {
+                    SendError(Client, 400);
+                    return;
+                }
                 string version = "";
                 try
                 {
@@ -477,7 +482,7 @@ namespace Server_TAC_Service
                 "where t.SP4032 in (select SP5213 from SC5204 where parentext in (select id from SC2286 where sp4767 = '" + code + "')) and t.isfolder <> 1 and t.ismark <> 1 " +
                 "order by p1.Code,p2.Code,p3.Code,p4.Code,p5.Code";
             //log.ToLog(query);
-            DataTable tbl = sql.SelectQuery(query, log, "sql2009");
+            DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Каталог товаров: " + tbl.Rows.Count);
 
@@ -576,7 +581,7 @@ namespace Server_TAC_Service
                 "and Ж.IDDOCDEF = '1157' " +
                 "group by Ж.Docno,Ж.DATE_TIME_IDDOC,k.code,d.code,r.SP6340";
             //log.ToLog(query);
-            DataTable tbl = sql.SelectQuery(query, log, "sql2009");
+            DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Дебеторка: " + tbl.Rows.Count);
 
@@ -602,7 +607,7 @@ namespace Server_TAC_Service
                 "left join SC72 p on p.id = parentext " +
                 "where p.id in (select k.id from DH5292 left join SC72 k on k.id = SP5295 left join SC2286 s on s.id = SP5297 where sp4767 = '" + code + "')";
             //log.ToLog(query);
-            DataTable tbl = sql.SelectQuery(query, log, "sql2009");
+            DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Точки: " + tbl.Rows.Count);
 
@@ -623,7 +628,7 @@ namespace Server_TAC_Service
         private List<GoodRest> GetGoodRests(string code)
         {
             DateTime dd = DateTime.Now;
-            string query = "select t.code, con.value, t2.SP1055, SP5394 from(select objid, max(date) date from sql2009.._1SCONST with(nolock) where id = 5230 group by objid) t1 " +
+            string query = "select t.code, con.value, t2.SP1055, SP5394 from(select objid, max(date) date from " + sqlDatabase + ".._1SCONST with(nolock) where id = 5230 group by objid) t1 " +
                 "left join _1SCONST con with(nolock) on con.objid = t1.objid and con.date = t1.date  and con.id = 5230 left join SC5232 c with(nolock) on c.id = t1.objid " +
                 "left join SC92 t with(nolock) on t.id = c.parentext " +
                 "left join SC5234 tc with(nolock) on tc.id = c.SP5229 " +
@@ -631,7 +636,7 @@ namespace Server_TAC_Service
                 "where t.id in (select t.id from SC92 t where t.SP4032 in (select SP5213 from SC5204 where parentext in (select id from SC2286 where sp4767 = '" + code + "')) and t.isfolder <> 1 and t.ismark <> 1) " +
                 "and tc.code = 1";
             log.ToLog(query);
-            DataTable tbl = sql.SelectQuery(query, log, "sql2009");
+            DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Остатки: " + tbl.Rows.Count);
 
@@ -642,7 +647,7 @@ namespace Server_TAC_Service
                 try{
                     double price = sql.DoubleFromSQL(row[1].ToString());
                     if (int.Parse(row[3].ToString()) == 1)
-                        price *= 1.525;
+                        price *= 1.0525;
 
                     goodRests.Add(new GoodRest()
                     {
@@ -663,7 +668,7 @@ namespace Server_TAC_Service
                 "left join SC5207 kv on kv.id = SP4032 " +
                 "left join SC92 p on p.id = t.parentid " +
                 "where t.SP4032 in (select SP5213 from SC5204 where parentext in (select id from SC2286 where sp4767 = '" + code + "')) and t.isfolder <> 1 and t.ismark <> 1; ";
-            DataTable tbl = sql.SelectQuery(query, log, "sql2009");
+            DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Товары: " + tbl.Rows.Count);
 
@@ -689,7 +694,7 @@ namespace Server_TAC_Service
                 "where parentext in (select id from SC2286 where sp4767 = '" + code + "')";
 
             //log.ToLog(query);
-            DataTable tbl = sql.SelectQuery(query, log, "sql2009");
+            DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Виды товаров: " + tbl.Rows.Count);
 
@@ -713,7 +718,7 @@ namespace Server_TAC_Service
                 "where sp4767 = '" + code + "'";
 
             //log.ToLog(query);
-            DataTable tbl = sql.SelectQuery(query, log, "sql2009");
+            DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Клиенты: " + tbl.Rows.Count);
 
@@ -738,7 +743,7 @@ namespace Server_TAC_Service
                 "left join SC4542 t(nolock) on t.id = sp5548 " +
                 "WHERE rg5545.period = '" + DateTime.Now.ToString("yyyyMM01") + "' and sp5550 > 0 " +
                 "and O.sp6421 in (select id from SC5210 where id in (select sp5212 from SC5207 where id in (select SP5213 from SC5204 where parentext in (select id from SC2286 where SP4767 = '" + code + "' and SP5667 = 1 and SP6320 = 1))))";
-            DataTable tbl = sql.SelectQuery(query, log, "sql2009");
+            DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             List<OborudRest> oborudRests = new List<OborudRest>();
             List<Oborud> oborud = new List<Oborud>();
@@ -802,7 +807,7 @@ namespace Server_TAC_Service
                 "WHERE rg5545.period = '" + DateTime.Now.ToString("yyyyMM01") + "' and S.SP4767 = '" + code + "' and sp5550 > 0 " +
                 "and O.sp6421 in (select id from SC5210 where id in (select sp5212 from SC5207 where id in (select SP5213 from SC5204 where parentext in " +
                 "(select id from SC2286 where SP4767 = '" + code + "' and SP5667 = 2 and SP6320 = 1))))";
-            DataTable tbl = sql.SelectQuery(query, log, "sql2009");
+            DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             List<OborudRest> oborudRests = new List<OborudRest>();
             List<Oborud> oborud = new List<Oborud>();
@@ -843,7 +848,7 @@ namespace Server_TAC_Service
                 "where T.sp4032 = '    4N   ' and period = '" + DateTime.Now.ToString("yyyyMM01") + "' and S.SP4767 = '" + code + "' and A.code is not null " +
                 "group by T.code, T.descr, K.code, K.Descr, A.code, A.Descr, A.SP4544, S.SP4767, S.DESCR " +
                 "having SUM(sp4451) <> 0";
-            DataTable tbl = sql.SelectQuery(query, log, "sql2009");
+            DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             List<TaraRest> taraRests = new List<TaraRest>();
 
@@ -864,7 +869,7 @@ namespace Server_TAC_Service
             }
 
             query = "select code, rtrim(descr) from SC92 where sp96 = '     X   ' and sp4032 = '    4N   '";
-            tbl = sql.SelectQuery(query, log, "sql2009");
+            tbl = sql.SelectQuery(query, log, sqlDatabase);
             List<Tara> tara = new List<Tara>();
 
             foreach (DataRow row in tbl.Rows)
@@ -890,7 +895,7 @@ namespace Server_TAC_Service
                 "where T.sp4032 = '    4N   ' and period = '" + DateTime.Now.ToString("yyyyMM01") + "' and A.code is not null " +
                 "group by T.code, T.descr, K.code, K.Descr, A.code, A.Descr, A.SP4544 " +
                 "having SUM(sp4451) < 0";
-            DataTable tbl = sql.SelectQuery(query, log, "sql2009");
+            DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             List<TaraRest> taraRests = new List<TaraRest>();
             List<Tara> tara = new List<Tara>();
@@ -949,7 +954,7 @@ namespace Server_TAC_Service
         }
         private Auth GetAuth(string code, string version)
         {
-            DataTable tbl = sql.SelectQuery("select rtrim(Descr), SP6320, SP5667 from SC2286 where sp4767 = '" + code + "'", log, "sql2009");
+            DataTable tbl = sql.SelectQuery("select rtrim(Descr), SP6320, SP5667 from SC2286 where sp4767 = '" + code + "'", log, sqlDatabase);
             Auth auth = new Auth();
             foreach (DataRow row in tbl.Rows)
             {
