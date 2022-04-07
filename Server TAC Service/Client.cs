@@ -3,12 +3,14 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace Server_TAC_Service
 {
@@ -27,6 +29,8 @@ namespace Server_TAC_Service
 
         public Client(LogFile mainlog)
         {
+            CultureInfo.CurrentCulture = new CultureInfo(CultureInfo.InvariantCulture.Name);
+
             sql = new SQL(String.Format(@"Provider=SQLOLEDB;Data Source={0};User ID={1};Password={2};", sqlServ, sqlUser, sqlPass));
             log = mainlog;
             string settingsFileName = @"C:\ServerTAC\settings.ini";
@@ -319,13 +323,13 @@ namespace Server_TAC_Service
                     version = Param[2];
                 }
                 catch { }
-                Auth auth = GetAuth(Param[1], version);
+
                 Update update = GetUpdate(Param[1], version);
                 string json = JsonConvert.SerializeObject(update);
                 SendResponse(Client, json);
 
 
-                log.ToLog("Полное обновление: " + auth.Name + " version: " + version);
+                log.ToLog("Полное обновление: " + update.Auth.Name + " version: " + update.Auth.Version);
             }
             else if (Param[0] == "GetDocs")
             {
@@ -590,17 +594,29 @@ namespace Server_TAC_Service
 
             List<Debet> debets = new List<Debet>();
 
-            foreach (DataRow row in tbl.Rows)
+            string nd = "";
+
+            try
             {
-                debets.Add(new Debet()
+                foreach (DataRow row in tbl.Rows)
                 {
-                    NumDoc = row[0].ToString(),
-                    DateDoc = row[1].ToString().Substring(0, 8),
-                    KlientCode = int.Parse(row[2].ToString()),
-                    DotCode = int.Parse(row[3].ToString()),
-                    Dolg = sql.DoubleFromSQL(row[4].ToString()),
-                    DatePay = DateTime.Parse(row[5].ToString())
-                });
+                    nd = row[0].ToString();
+                    if (nd== "2200027344")
+                        log.ToLog("Помилка: ");
+
+                    debets.Add(new Debet()
+                    {
+                        NumDoc = row[0].ToString(),
+                        DateDoc = row[1].ToString().Substring(0, 8),
+                        KlientCode = int.Parse(row[2].ToString()),
+                        DotCode = int.Parse(row[3].ToString()),
+                        Dolg = sql.DoubleFromSQL(row[4].ToString()),
+                        DatePay = DateTime.Parse(row[5].ToString())
+                    });
+                    
+                }
+            } catch (Exception ex) {
+                log.ToLog("Помилка: " + ex.Message);
             }
             return debets;
         }
@@ -633,7 +649,7 @@ namespace Server_TAC_Service
             DateTime dd = DateTime.Now;
             string query = "select t.code, con.value, t2.SP1055, SP5394 from(" +
                 "select objid, max(date) date from _1SCONST with(nolock) where id = 5230 group by objid" +
-                ") t1" +
+                ") t1 " +
                 "left join _1SCONST con with(nolock) on con.objid = t1.objid and con.date = t1.date  and con.id = 5230 left join SC5232 c with(nolock) on c.id = t1.objid " +
                 "left join SC92 t with(nolock) on t.id = c.parentext " +
                 "left join SC5234 tc with(nolock) on tc.id = c.SP5229 " +
