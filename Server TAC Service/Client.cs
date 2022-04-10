@@ -18,7 +18,7 @@ namespace Server_TAC_Service
     {
         private SQL sql;
         private LogFile log;
-        private string TrueVersion = "0.8";
+        private string TrueVersion = "0.9";
         private bool isTaraRest;
         private string sqlDatabase = "J_Base";
         private string sqlServ = "192.168.0.137";
@@ -65,7 +65,7 @@ namespace Server_TAC_Service
             do
             {
                 int bytes = reader.Read(Buffer, 0, Buffer.Length);
-                System.Threading.Thread.Sleep(500);
+                Thread.Sleep(500);
                 response.Append(Encoding.UTF8.GetString(Buffer, 0, bytes));
             }
             while (stream.DataAvailable); // пока данные есть в потоке
@@ -622,9 +622,16 @@ namespace Server_TAC_Service
         }
         private List<Dot> GetDots(string code)
         {
-            string query = "select p.code, d.code, rtrim(d.Descr), rtrim(sp4544) from SC4542 d " +
+            string query = "select p.code, d.code, rtrim(d.Descr), rtrim(sp4544), f.code from SC4542 d " +
                 "left join SC72 p on p.id = parentext " +
-                "where p.id in (select k.id from DH5292 left join SC72 k on k.id = SP5295 left join SC2286 s on s.id = SP5297 where sp4767 = '" + code + "')";
+                "left join SC6497 f on f.id = SP6561 " +
+                "where p.id in (" +
+                "   select k.id " +
+                "   from DH5292 " +
+                "   left join SC72 k on k.id = SP5295 " +
+                "   left join SC2286 s on s.id = SP5297 " +
+                "   where sp4767 = '" + code + "')";
+
             //log.ToLog(query);
             DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
@@ -639,7 +646,8 @@ namespace Server_TAC_Service
                     KlientCode = int.Parse(row[0].ToString()),
                     DotCode = int.Parse(row[1].ToString()),
                     DotName = row[2].ToString(),
-                    DotAddress = row[3].ToString()
+                    DotAddress = row[3].ToString(),
+                    DotFillial = row[4].ToString(),
                 });
             }
             return dots;
@@ -647,26 +655,19 @@ namespace Server_TAC_Service
         private List<GoodRest> GetGoodRests(string code)
         {
             DateTime dd = DateTime.Now;
-            string query = "select t.code, con.value, t2.SP1055, SP5394 from(" +
-                "select objid, max(date) date from _1SCONST with(nolock) where id = 5230 group by objid" +
-                ") t1 " +
-                "left join _1SCONST con with(nolock) on con.objid = t1.objid and con.date = t1.date  and con.id = 5230 left join SC5232 c with(nolock) on c.id = t1.objid " +
-                "left join SC92 t with(nolock) on t.id = c.parentext " +
-                "left join SC5234 tc with(nolock) on tc.id = c.SP5229 " +
-                "left join(" +
-                "select SP1053, sum(SP1055) SP1055 from RG1051 " +
+            string query = "select t.code, sum(SP1055), f.code fillial from RG1051 " +
                 "left join SC124 s on s.id = SP1052 " +
+                "left join SC6497 f on f.id = s.SP6542 " +
+                "left join SC92 t with(nolock) on t.id = SP1053 " +
                 "where period = '" + dd.ToString("yyyyMM01") + "' " +
-                "and s.code in (1, 12, 9) " + // 1, 12, 9 Jytomir  / 1 Vinnitsa
+                "and s.code in (1, 12, 9) " +
                 "and SP1055 > 0 " +
-                "group by SP1053" +
-                ") t2 on t2.SP1053 = t.id " +
-                "where t.id in (" +
-                "select t.id from SC92 t where t.SP4032 in (" +
-                "select SP5213 from SC5204 where parentext in (" +
-                "select id from SC2286 where sp4767 = '" + code + "')) " +
-                "and t.isfolder <> 1 and t.ismark <> 1) " +
-                "and tc.code = 1";
+                "and t.id in (" +
+                "    select t.id from SC92 t where t.SP4032 in (" +
+                "        select SP5213 from SC5204 where parentext in (" +
+                "            select id from SC2286 where sp4767 = '" + code + "'))) " +
+                "and t.isfolder <> 1 and t.ismark <> 1 " +
+                "group by t.code, SP5394, f.code";
 
             log.ToLog(query);
             DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
@@ -678,15 +679,11 @@ namespace Server_TAC_Service
             foreach (DataRow row in tbl.Rows)
             {
                 try{
-                    double price = sql.DoubleFromSQL(row[1].ToString());
-                    if (int.Parse(row[3].ToString()) == 1)
-                        price *= 1.0525;
-
                     goodRests.Add(new GoodRest()
                     {
                         Code = int.Parse(row[0].ToString()),
-                        Price = Math.Round(price, 2),
-                        Quantity = sql.DoubleFromSQL(row[2].ToString())
+                        Quantity = sql.DoubleFromSQL(row[1].ToString()),
+                        Fillial = row[2].ToString(),
                     });
                 }catch(Exception ex)
                 {
@@ -697,10 +694,19 @@ namespace Server_TAC_Service
         }
         private List<Good> GetGoods(string code)
         {
-            string query = "select t.code, rtrim(t.descr), p.code, t.SP4473, kv.code from SC92 t " +
+            string query = "select t.code, rtrim(t.descr) descr, p.code, t.SP4473, kv.code, con.value, t.SP5394 from SC92 t " +
                 "left join SC5207 kv on kv.id = SP4032 " +
                 "left join SC92 p on p.id = t.parentid " +
-                "where t.SP4032 in (select SP5213 from SC5204 where parentext in (select id from SC2286 where sp4767 = '" + code + "')) and t.isfolder <> 1 and t.ismark <> 1; ";
+                "left join SC5232 c with(nolock) on c.parentext = t.id " +
+                "left join SC5234 tc with(nolock) on tc.id = c.SP5229 " +
+                "left join(select objid, max(date) date from _1SCONST with(nolock) where id = 5230 group by objid) t1 on t1.OBJID = c.id " +
+                "left join _1SCONST con with(nolock) on con.objid = t1.objid and con.date = t1.date  and con.id = 5230 " +
+                "where t.SP4032 in (" +
+                "    select SP5213 from SC5204" +
+                "    where parentext in (" +
+                "        select id from SC2286 where sp4767 = '" + code + "')) " +
+                "and t.isfolder <> 1 and t.ismark <> 1 and tc.code = 1";
+
             DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Товары: " + tbl.Rows.Count);
@@ -709,13 +715,18 @@ namespace Server_TAC_Service
 
             foreach (DataRow row in tbl.Rows)
             {
+                double price = sql.DoubleFromSQL(row[5].ToString());
+                if (int.Parse(row[6].ToString()) == 1)
+                    price *= 1.0525;
+
                 goods.Add(new Good()
                 {
                     Code = int.Parse(row[0].ToString()),
                     Name = row[1].ToString(),
                     ParentID = int.Parse(row[2].ToString()),
                     Box = int.Parse(row[3].ToString()),
-                    GoodView = row[4].ToString()
+                    GoodView = row[4].ToString(),
+                    Price = price,
                 });
             }
             return goods;
@@ -1073,12 +1084,13 @@ namespace Server_TAC_Service
         public int DotCode;
         public string DotName;
         public string DotAddress;
+        public string DotFillial;
     }
     class GoodRest
     {
         public int Code;
         public double Quantity;
-        public double Price;
+        public string Fillial;
     }
     class GoodView
     {
@@ -1093,6 +1105,7 @@ namespace Server_TAC_Service
         public int ParentID;
         public int Box;
         public string GoodView;
+        public double Price;
     }
     public class GoodsDirectory
     {

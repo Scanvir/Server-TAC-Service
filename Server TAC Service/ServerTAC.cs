@@ -14,6 +14,7 @@ namespace Server_TAC_Service
         private Thread ServerThread;
         private Server server;
         private string ip;
+        private int port = 1221;
         private LogFile log;
 
         public ServerTAC()
@@ -79,7 +80,7 @@ namespace Server_TAC_Service
 
             server = new Server();
             server.onChange += OnChangeServerState;
-            server.StartServer(ip, 1221);
+            server.StartServer(ip, port);
         }
         private void OnChangeNetworkState(object sender, EventArgs e)
         {
