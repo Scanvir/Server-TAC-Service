@@ -20,10 +20,14 @@ namespace Server_TAC_Service
         private LogFile log;
         private string TrueVersion = "0.9";
         private bool isTaraRest;
-        private string sqlDatabase = "J_Base";
-        private string sqlServ = "192.168.0.137";
+        //private string sqlDatabase = "J_Base";
+        private string sqlDatabase = "sql2009";
+        //private string sqlServ = "192.168.0.137";
+        private string sqlServ = "192.168.0.101";
         private string sqlUser = "sa";
-        private string sqlPass = "Inter0000";
+        //private string sqlPass = "Inter0000";
+        private string sqlPass = "987312";
+
 
         public const string RootDir = @"C:\ServerTAC";
 
@@ -480,7 +484,10 @@ namespace Server_TAC_Service
         }
         private List<GoodsDirectory> GetGoodsDirectory(string code)
         {
-            string query = "select DISTINCT p1.CODE, rtrim(p1.DESCR), p2.CODE, rtrim(p2.DESCR), p3.CODE, rtrim(p3.DESCR), p4.CODE, rtrim(p4.DESCR), p5.CODE, rtrim(p5.DESCR) from SC92 t " +
+            string query = "select DISTINCT p1.CODE, rtrim(p1.DESCR), p2.CODE, rtrim(p2.DESCR), p3.CODE, rtrim(p3.DESCR), p4.CODE, rtrim(p4.DESCR), " +
+                "case when p5.CODE is null then 99999 else p5.CODE end code, " +
+                "case when p5.CODE is null then 'БЕЗ ГРУПИ' else rtrim(p5.DESCR) end descr " +
+                "from SC92 t " +
                 "left join SC92 p5 on p5.id = t.parentid " +
                 "left join SC92 p4 on p4.id = p5.parentid " +
                 "left join SC92 p3 on p3.id = p4.parentid " +
@@ -694,7 +701,7 @@ namespace Server_TAC_Service
         }
         private List<Good> GetGoods(string code)
         {
-            string query = "select t.code, rtrim(t.descr) descr, p.code, t.SP4473, kv.code, con.value, t.SP5394 from SC92 t " +
+            string query = "select t.code, rtrim(t.descr) descr, case when p.code is null then '99999' else p.code end code, t.SP4473, kv.code, con.value, t.SP5394 from SC92 t " +
                 "left join SC5207 kv on kv.id = SP4032 " +
                 "left join SC92 p on p.id = t.parentid " +
                 "left join SC5232 c with(nolock) on c.parentext = t.id " +
