@@ -51,7 +51,13 @@ namespace Server_TAC_Service
         }
         private void ExchangeTAC()
         {
-            Process.Start(@"C:\ServerTAC\ExchangeTAC.vbs").WaitForExit(1000 * 60 * 10);
+            try
+            {
+                Process.Start(@"C:\ServerTAC\ExchangeTAC.vbs").WaitForExit(1000 * 60 * 10);
+            }catch (Exception ex)
+            {
+                log.ToLog("Sheduler error: " + ex.Message);
+            }
         }
     }
 }

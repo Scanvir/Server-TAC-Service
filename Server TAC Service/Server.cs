@@ -14,6 +14,7 @@ namespace Server_TAC_Service
         public event WorkServer onChange;
 
         private LogFile log;
+        private Config config;
 
         private bool ServerWork;
 
@@ -24,9 +25,10 @@ namespace Server_TAC_Service
             log.TruncateLog(3);
             ServerWork = false;
         }
-        public void StartServer(string Address, int Port)
+        public void StartServer(string Address, int Port, Config config)
         {
             IPAddress address = IPAddress.Parse(Address);
+            this.config = config;
             Listener = new TcpListener(address, Port);
             Listener.Start(); // Запускаем его
             ServerWork = true;
@@ -71,7 +73,7 @@ namespace Server_TAC_Service
         {
             try
             {
-                Client client = new Client(log);
+                Client client = new Client(log, config);
                 client.Init((TcpClient)StateInfo);
             }
             catch (Exception ex)

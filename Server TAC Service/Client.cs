@@ -18,39 +18,26 @@ namespace Server_TAC_Service
     {
         private SQL sql;
         private LogFile log;
-        private string TrueVersion = "0.9";
+        private string TrueVersion;
         private bool isTaraRest;
-        //private string sqlDatabase = "J_Base";
-        private string sqlDatabase = "sql2009";
-        //private string sqlServ = "192.168.0.137";
-        private string sqlServ = "192.168.0.101";
-        private string sqlUser = "sa";
-        //private string sqlPass = "Inter0000";
-        private string sqlPass = "987312";
+        private string sqlDatabase;
+        private string sqlServ;
+        private string sqlUser;
+        private string sqlPass;
 
-
-        public const string RootDir = @"C:\ServerTAC";
-
-        public Client(LogFile mainlog)
+        public Client(LogFile mainlog, Config config)
         {
             CultureInfo.CurrentCulture = new CultureInfo(CultureInfo.InvariantCulture.Name);
 
-            sql = new SQL(String.Format(@"Provider=SQLOLEDB;Data Source={0};User ID={1};Password={2};", sqlServ, sqlUser, sqlPass));
             log = mainlog;
-            string settingsFileName = @"C:\ServerTAC\settings.ini";
-            if (File.Exists(settingsFileName))
-            {
-                string text = File.ReadAllText(settingsFileName);
-                log.ToLog("isTaraRests");
-                log.ToLog(text);
-                if (text == "1")
-                    isTaraRest = false;
-                else
-                    isTaraRest = true;
-            } else
-            {
-                isTaraRest = true;
-            }
+            TrueVersion = config.TrueVersion;
+            isTaraRest = config.isTaraRest;
+            sqlDatabase = config.sqlDatabase;
+            sqlServ = config.sqlServ;
+            sqlUser = config.sqlUser;
+            sqlPass = config.sqlPass;
+
+            sql = new SQL(String.Format(@"Provider=SQLOLEDB;Data Source={0};User ID={1};Password={2};", sqlServ, sqlUser, sqlPass));
         }
 
         public void Init(TcpClient Client)
@@ -75,15 +62,23 @@ namespace Server_TAC_Service
             while (stream.DataAvailable); // пока данные есть в потоке
 
             Request = response.ToString();
-            //log.ToLog("Request: " + Request);
+            if (Request == string.Empty)
+                return;
 
             string json = "";
-
-            if (Request.Substring(0, 4) == "POST")
+            try { 
+                if (Request.Substring(0, 4) == "POST")
+                {
+                    int first = Request.IndexOf("{\"Auth\"");
+                    int last = Request.LastIndexOf('}');
+                    json = Request.Substring(first, last - first + 1);
+                }
+            }
+            catch (Exception ex)
             {
-                int first = Request.IndexOf("{\"Auth\"");
-                int last = Request.LastIndexOf('}');
-                json = Request.Substring(first, last - first + 1);
+                log.ToLog("Ошибка в запросе 1: " + ex.Message);
+                log.ToLog("Запрос: " + Request);
+                return;
             }
 
             Match ReqMatch = Regex.Match(Request, @"^\w+\s+([^\s\?]+)[^\s]*\s+HTTP/.*|");
@@ -99,14 +94,20 @@ namespace Server_TAC_Service
                 SendError(Client, 400);
                 return;
             }
-
-            if (Request.Substring(0, 3) == "GET")
+            try
             {
-                GetMethod(Client, RequestUri);
-            }
-            if (Request.Substring(0, 4) == "POST")
+                if (Request.Substring(0, 3) == "GET")
+                {
+                    GetMethod(Client, RequestUri);
+                }
+                if (Request.Substring(0, 4) == "POST")
+                {
+                    PostMethod(Client, RequestUri, json);
+                }
+            } catch (Exception ex)
             {
-                PostMethod(Client, RequestUri, json);
+                log.ToLog("Ошибка в запросе 2: " + ex.Message);
+                log.ToLog("Запрос: " + Request);
             }
         }
         public void PostMethod(TcpClient Client, string RequestUri, string json)
@@ -132,13 +133,11 @@ namespace Server_TAC_Service
                 foreach (PKO pko in pkoList)
                 {
                     string query = "SELECT status FROM [Web-service].tac.PKO where GUID = '" + pko.GUID + "'";
-                    //log.ToLog(query);
                     DataTable tbl = sql.SelectQuery(query, log, "Web-service");
 
                     if (tbl.Rows.Count == 0)
                     {
                         query = "INSERT INTO [Web-service].tac.PKO VALUES ('" + pko.GUID + "', '" + agent + "', '" + pko.DateDoc + "', '" + pko.NumDoc + "', " + pko.KlientCode + ", " + pko.DotCode + ", " + pko.Summ.ToString().Replace(",", ".") + ", '" + pko.DatePay + "', 1, null)";
-                        //log.ToLog(query);
                         if (sql.Execute(query, log))
                         {
                             pkoReturn.Add(new DocReturn()
@@ -146,6 +145,9 @@ namespace Server_TAC_Service
                                 GUID = pko.GUID,
                                 Status = 1
                             });
+                        } else
+                        {
+                            log.ToLog("NON EXEQUTE QUERY: " + query);
                         }
                     }
                     else
@@ -175,14 +177,17 @@ namespace Server_TAC_Service
                             foreach (OrderTab tab in order.OrderTab)
                             {
                                 query = "INSERT INTO [Web-service].tac.OrderTab VALUES ('" + order.GUID + "', " + tab.GoodCode + ", " + tab.Quantity + ", " + tab.PriceUAH + ", " + tab.Summ + ")";
-                                //log.ToLog(query);
-                                sql.Execute(query, log);
+                                if (!sql.Execute(query, log))
+                                    log.ToLog("NON EXEQUTE QUERY: " + query);
                             }
                             orderReturn.Add(new DocReturn()
                             {
                                 GUID = order.GUID,
                                 Status = 1
                             });
+                        } else
+                        {
+                            log.ToLog("NON EXEQUTE QUERY: " + query);
                         }
                     }
                     else
@@ -204,13 +209,11 @@ namespace Server_TAC_Service
                 foreach (TaraFacing taraFacing in taraFacings)
                 {
                     string query = "SELECT status FROM [Web-service].tac.TaraFacing where GUID = '" + taraFacing.GUID + "'";
-                    //log.ToLog(query);
                     DataTable tbl = sql.SelectQuery(query, log, "Web-service");
 
                     if (tbl.Rows.Count == 0)
                     {
                         query = "INSERT INTO [Web-service].tac.TaraFacing VALUES ('" + taraFacing.GUID + "', '" + agent + "', '" + taraFacing.DateDoc + "', " + taraFacing.KlientCode + ", " + taraFacing.DotCode + ", " + taraFacing.TaraCode + ", " + taraFacing.Quantity.ToString().Replace(",", ".") + ", 1, null)";
-                        //log.ToLog(query);
                         if (sql.Execute(query, log))
                         {
                             taraFacingReturn.Add(new DocReturn()
@@ -218,6 +221,9 @@ namespace Server_TAC_Service
                                 GUID = taraFacing.GUID,
                                 Status = 1
                             });
+                        } else
+                        {
+                            log.ToLog("NON EXEQUTE QUERY: " + query);
                         }
                     }
                     else
@@ -239,13 +245,11 @@ namespace Server_TAC_Service
                 foreach (OborudFacing oborudFacing in oborudFacings)
                 {
                     string query = "SELECT status FROM [Web-service].tac.OborudFacing where GUID = '" + oborudFacing.GUID + "'";
-                    //log.ToLog(query);
                     DataTable tbl = sql.SelectQuery(query, log, "Web-service");
 
                     if (tbl.Rows.Count == 0)
                     {
                         query = "INSERT INTO [Web-service].tac.OborudFacing VALUES ('" + oborudFacing.GUID + "', '" + agent + "', '" + oborudFacing.DateDoc + "', " + oborudFacing.KlientCode + ", " + oborudFacing.DotCode + ", '" + oborudFacing.OborudCode + "', " + oborudFacing.Quantity.ToString().Replace(",", ".") + ", 1, null)";
-                        //log.ToLog(query);
                         if (sql.Execute(query, log))
                         {
                             oborudFacingReturn.Add(new DocReturn()
@@ -253,7 +257,11 @@ namespace Server_TAC_Service
                                 GUID = oborudFacing.GUID,
                                 Status = 1
                             });
+                        } else
+                        {
+                            log.ToLog("NON EXEQUTE QUERY: " + query);
                         }
+
                     }
                     else
                     {
@@ -271,7 +279,6 @@ namespace Server_TAC_Service
                 newUpdate.TaraFacingReturn = taraFacingReturn;
                 newUpdate.OborudFacingReturn = oborudFacingReturn;
                 json = JsonConvert.SerializeObject(newUpdate);
-                log.ToLog("Сформирован ответ:" + json);
                 try
                 {
                     SendResponse(Client, json);
@@ -377,6 +384,10 @@ namespace Server_TAC_Service
             try
             {
                 byte[] Buffer = new byte[1024];
+                if(fileName == "/favicon.ico")
+                {
+                    fileName = @"c:\ServerTAC\Server TAC Service\favicon.ico";
+                }
                 FileStream FS = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read);
                 string Headers = "HTTP/1.1 200 OK\nContent-Type: image/jpeg\nContent-Length: " + FS.Length + "\n\n";
                 byte[] HeadersBuffer = Encoding.ASCII.GetBytes(Headers);
@@ -423,7 +434,6 @@ namespace Server_TAC_Service
 
             }
         }
-
         private Update GetUpdate(string code, string version)
         {
             Update update = new Update();
@@ -493,9 +503,7 @@ namespace Server_TAC_Service
                 "left join SC92 p3 on p3.id = p4.parentid " +
                 "left join SC92 p2 on p2.id = p3.parentid " +
                 "left join SC92 p1 on p1.id = p2.parentid " +
-                "where t.SP4032 in (select SP5213 from SC5204 where parentext in (select id from SC2286 where sp4767 = '" + code + "')) and t.isfolder <> 1 and t.ismark <> 1 " +
-                "order by p1.Code,p2.Code,p3.Code,p4.Code,p5.Code";
-            //log.ToLog(query);
+                "where t.SP4032 in (select SP5213 from SC5204 where parentext in (select id from SC2286 where sp4767 = '" + code + "')) and t.isfolder <> 1 and t.ismark <> 1 ";
             DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Каталог товаров: " + tbl.Rows.Count);
@@ -508,7 +516,6 @@ namespace Server_TAC_Service
         {
             DateTime dd = DateTime.Now;
             string query = "select GUID, DateDoc, NumDoc, KlientCode, DotCode, Summ, DatePay, Status from tac.PKO where Upper(agentCode) = '" + code.ToUpper() + "'";
-            //log.ToLog(query);
             DataTable tbl = sql.SelectQuery(query, log, "Web-service");
 
             log.ToLog("ПКО: " + tbl.Rows.Count);
@@ -536,7 +543,6 @@ namespace Server_TAC_Service
         {
             DateTime dd = DateTime.Now;
             string query = "select GUID, DateDoc, KlientCode, DotCode, Status, FlagA, FlagF, Comment, Form from tac.OrderDoc where Upper(agentCode) = '" + code.ToUpper() + "'";
-            //log.ToLog(query);
             DataTable tbl = sql.SelectQuery(query, log, "Web-service");
 
             log.ToLog("Заказов: " + tbl.Rows.Count);
@@ -546,7 +552,6 @@ namespace Server_TAC_Service
             foreach (DataRow row in tbl.Rows)
             {
                 query = "select GoodCode, Quantity, PriceUAH, Summ from tac.OrderTab where GUID = '" + row[0].ToString() + "'";
-                //log.ToLog(query);
                 DataTable tbl1 = sql.SelectQuery(query, log, "Web-service");
 
                 log.ToLog("Строк: " + tbl1.Rows.Count);
@@ -594,7 +599,6 @@ namespace Server_TAC_Service
                 "WHERE rg1060.period = '" + dd.ToString("yyyyMM01") + "' and sp4767 = '" + code + "' and sp1063<> 0 " +
                 "and Ж.IDDOCDEF = '1157' " +
                 "group by Ж.Docno,Ж.DATE_TIME_IDDOC,k.code,d.code,r.SP6340";
-            //log.ToLog(query);
             DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Дебеторка: " + tbl.Rows.Count);
@@ -638,8 +642,6 @@ namespace Server_TAC_Service
                 "   left join SC72 k on k.id = SP5295 " +
                 "   left join SC2286 s on s.id = SP5297 " +
                 "   where sp4767 = '" + code + "')";
-
-            //log.ToLog(query);
             DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Точки: " + tbl.Rows.Count);
@@ -676,7 +678,6 @@ namespace Server_TAC_Service
                 "and t.isfolder <> 1 and t.ismark <> 1 " +
                 "group by t.code, SP5394, f.code";
 
-            log.ToLog(query);
             DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Остатки: " + tbl.Rows.Count);
@@ -706,7 +707,7 @@ namespace Server_TAC_Service
                 "left join SC92 p on p.id = t.parentid " +
                 "left join SC5232 c with(nolock) on c.parentext = t.id " +
                 "left join SC5234 tc with(nolock) on tc.id = c.SP5229 " +
-                "left join(select objid, max(date) date from _1SCONST with(nolock) where id = 5230 group by objid) t1 on t1.OBJID = c.id " +
+                "left join(select objid, max(date) date from _1SCONST with(nolock) where id = 5230 and date <= GetDate() group by objid) t1 on t1.OBJID = c.id " +
                 "left join _1SCONST con with(nolock) on con.objid = t1.objid and con.date = t1.date  and con.id = 5230 " +
                 "where t.SP4032 in (" +
                 "    select SP5213 from SC5204" +
@@ -743,8 +744,6 @@ namespace Server_TAC_Service
             string query = "select kv.code, rtrim(kv.descr) from SC5204 v " +
                 "left join SC5207 kv on kv.id = SP5213 " +
                 "where parentext in (select id from SC2286 where sp4767 = '" + code + "')";
-
-            //log.ToLog(query);
             DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Виды товаров: " + tbl.Rows.Count);
@@ -768,7 +767,6 @@ namespace Server_TAC_Service
                 "left join SC2286 s on s.id = SP5297 " +
                 "where sp4767 = '" + code + "'";
 
-            //log.ToLog(query);
             DataTable tbl = sql.SelectQuery(query, log, sqlDatabase);
 
             log.ToLog("Клиенты: " + tbl.Rows.Count);
@@ -1020,172 +1018,5 @@ namespace Server_TAC_Service
             }
             return auth;
         }
-    }
-
-    class Auth
-    {
-        public string Name;
-        public string Code;
-        public int TAC;
-        public int Type;
-        public string Version;
-    }
-    class Update
-    {
-        public Auth Auth;
-        public string Version;
-        public Good[] Good;
-        public List<GoodsDirectory> GoodsDirectory;
-        public Tara[] Tara;
-        public Oborud[] Oborud;
-        public List<Klient> Klient;
-        public List<Dot> Dot;
-        public GoodView[] GoodView;
-        public GoodRest[] GoodRests;
-        public TaraRest[] TaraRests;
-        public OborudRest[] OborudRests;
-        public Debet[] Debet;
-        public PKO[] PKO;
-        public DocReturn[] PKOReturn;
-        public Order[] Order;
-        public DocReturn[] OrderReturn;
-        public List<TaraFacing> TaraFacing;
-        public List<OborudFacing> OborudFacing;
-        public List<DocReturn> TaraFacingReturn;
-        public List<DocReturn> OborudFacingReturn;
-    }
-    class OborudRest
-    {
-        public string OborudCode;
-        public int KlientCode;
-        public int DotCode;
-        public double Qty;
-    }
-    class Oborud
-    {
-        public string OborudCode;
-        public string OborudName;
-        public string OborudInventCode;
-    }
-    class TaraRest
-    {
-        public int TaraCode;
-        public int KlientCode;
-        public int DotCode;
-        public double Qty;
-        public double Delay;
-    }
-    class Tara
-    {
-        public int TaraCode;
-        public string TaraName;
-    }
-    class Klient
-    {
-        public int KlientCode;
-        public string KlientName;
-    }
-    class Dot
-    {
-        public int KlientCode;
-        public int DotCode;
-        public string DotName;
-        public string DotAddress;
-        public string DotFillial;
-    }
-    class GoodRest
-    {
-        public int Code;
-        public double Quantity;
-        public string Fillial;
-    }
-    class GoodView
-    {
-        public string Сode;
-        public string Name;
-    }
-
-    class Good
-    {
-        public int Code;
-        public string Name;
-        public int ParentID;
-        public int Box;
-        public string GoodView;
-        public double Price;
-    }
-    public class GoodsDirectory
-    {
-        public int Code;
-        public int ParentCode;
-        public string Name;
-        public int Level;
-        public List<GoodsDirectory> Child;
-    }
-    class Debet
-    {
-        public string NumDoc;
-        public string DateDoc;
-        public int KlientCode;
-        public int DotCode;
-        public double Dolg;
-        public DateTime DatePay;
-    }
-    public class PKO
-    {
-        public string GUID;
-        public string NumDoc;
-        public string DateDoc;
-        public int KlientCode;
-        public int DotCode;
-        public double Summ;
-        public string DatePay;
-        public int Status;
-    }
-    public class Order
-    {
-        public string GUID;
-        public string DateDoc;
-        public int KlientCode;
-        public int DotCode;
-        public int Status;
-        public int FlagA;
-        public int FlagF;
-        public string Comment;
-        public int Form;
-        public List<OrderTab> OrderTab;
-    }
-    public class OrderTab
-    {
-        public string GUID;
-        public int GoodCode;
-        public int Quantity;
-        public double PriceUAH;
-        public double Summ;
-    }
-    public class DocReturn
-    {
-        public string GUID;
-        public int Status;
-    }
-    public class TaraFacing
-    {
-        public string DateDoc;
-        public string GUID;
-        public int KlientCode;
-        public int DotCode;
-        public int TaraCode;
-        public double Quantity;
-        public int Status;
-    }
-    public class OborudFacing
-    {
-        public string DateDoc;
-        public string GUID;
-        public int KlientCode;
-        public int DotCode;
-        public string OborudCode;
-        public double Quantity;
-        public int Status;
     }
 }

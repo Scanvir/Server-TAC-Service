@@ -1,5 +1,7 @@
 ﻿using MyLib;
+using Newtonsoft.Json;
 using System;
+using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.ServiceProcess;
@@ -13,10 +15,12 @@ namespace Server_TAC_Service
 
         private Thread ServerThread;
         private Server server;
+        private Config config;
+        private LogFile log;
+        
         private string ip;
         private int port = 1221;
-        private LogFile log;
-
+        
         public ServerTAC()
         {
             InitializeComponent();
@@ -37,7 +41,37 @@ namespace Server_TAC_Service
         }
         public void OnDebug()
         {
+            log = new LogFile(@"C:\ServerTAC\ServerTAC.log");
+            ReadConfig();
+            Client client = new Client(log, config);
             OnStart(null);
+        }
+        private bool ReadConfig()
+        {
+            try
+            {
+                string strExeFilePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+                string strWorkPath = System.IO.Path.GetDirectoryName(strExeFilePath);
+
+                string configFile = strWorkPath + "\\Server TAC Config.json";
+
+                using (StreamReader r = new StreamReader(configFile))
+                {
+                    string json = r.ReadToEnd();
+                    config = JsonConvert.DeserializeObject<Config>(json);
+                }
+
+                log.ToLog("SERVER SQL: " + config.sqlServ);
+                log.ToLog("SERVER SQL User: " + config.sqlUser);
+                log.ToLog("SERVER SQL Database: " + config.sqlDatabase);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                log.ToLog("ERROR Read json config file " + ex.Message);
+                return false;
+            }
         }
         private bool GetIP()
         {
@@ -64,7 +98,7 @@ namespace Server_TAC_Service
         }
         private bool AutoStartServer()
         {
-            if (GetIP() && !ServerWork)
+            if (GetIP() && ReadConfig() && !ServerWork)
             {
                 ServerThread = new Thread(new ParameterizedThreadStart(StartServer));
                 ServerThread.Start();
@@ -80,7 +114,7 @@ namespace Server_TAC_Service
 
             server = new Server();
             server.onChange += OnChangeServerState;
-            server.StartServer(ip, port);
+            server.StartServer(ip, port, config);
         }
         private void OnChangeNetworkState(object sender, EventArgs e)
         {
