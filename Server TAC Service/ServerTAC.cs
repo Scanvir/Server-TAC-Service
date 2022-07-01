@@ -17,7 +17,8 @@ namespace Server_TAC_Service
         private Server server;
         private Config config;
         private LogFile log;
-        
+
+        private string strWorkPath;
         private string ip;
         private int port = 1221;
         
@@ -27,11 +28,14 @@ namespace Server_TAC_Service
         }
         protected override void OnStart(string[] args)
         {
-            log = new LogFile(@"C:\ServerTAC\ServerTAC.log");
+            strWorkPath = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            log = new LogFile(strWorkPath + "\\ServerTAC.log");
+            log.TruncateLog(3);
 
-            Sheduler shed = new Sheduler();
             NetworkChange.NetworkAddressChanged += new NetworkAddressChangedEventHandler(OnChangeNetworkState);
             AutoStartServer();
+
+            Sheduler shed = new Sheduler(config);
         }
         protected override void OnStop()
         {
@@ -41,7 +45,7 @@ namespace Server_TAC_Service
         }
         public void OnDebug()
         {
-            log = new LogFile(@"C:\ServerTAC\ServerTAC.log");
+            log = new LogFile(strWorkPath + "\\ServerTAC.log");
             ReadConfig();
             Client client = new Client(log, config);
             OnStart(null);
@@ -50,9 +54,6 @@ namespace Server_TAC_Service
         {
             try
             {
-                string strExeFilePath = System.Reflection.Assembly.GetExecutingAssembly().Location;
-                string strWorkPath = System.IO.Path.GetDirectoryName(strExeFilePath);
-
                 string configFile = strWorkPath + "\\Server TAC Config.json";
 
                 using (StreamReader r = new StreamReader(configFile))
@@ -112,7 +113,7 @@ namespace Server_TAC_Service
             if (ip == "")
                 return;
 
-            server = new Server();
+            server = new Server(log);
             server.onChange += OnChangeServerState;
             server.StartServer(ip, port, config);
         }

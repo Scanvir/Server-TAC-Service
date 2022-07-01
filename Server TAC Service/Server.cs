@@ -17,12 +17,11 @@ namespace Server_TAC_Service
         private Config config;
 
         private bool ServerWork;
+        private string strWorkPath;
 
-        public Server()
+        public Server(LogFile log)
         {
-            
-            log = new LogFile(@"C:\ServerTAC\Server.log");
-            log.TruncateLog(3);
+            this.log = log;
             ServerWork = false;
         }
         public void StartServer(string Address, int Port, Config config)
